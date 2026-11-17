@@ -111,8 +111,53 @@ html, body {
   pointer-events: none;
 }
 
-.info {
-  font-size: 15px;
+.hidden { display: none !important; }
+
+#result { margin-bottom: 14px; }
+
+#new-record {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 2px 10px;
+  background: #ffcc33;
+  color: #3a2a00;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.result-main .big {
+  font-size: 48px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.result-main .label,
+.result-grid .label {
+  font-size: 12px;
+  color: #8a93a3;
+}
+
+.result-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.result-grid > div {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  background: #14171d;
+  border-radius: 8px;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+
+.best {
+  font-size: 13px;
+  color: #c8cfda;
   margin-bottom: 14px;
 }
 
