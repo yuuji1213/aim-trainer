@@ -1,5 +1,6 @@
 // 플릭 모드 규칙: 상태(대기/카운트다운/플레이/일시정지/종료), 타이머, 표적 재배치, 집계
-import { createTarget, placeTarget, hideTarget, shootAt } from './targets.js';
+import * as THREE from 'three';
+import { createTarget, placeTarget, hideTarget, applyHit, aliveMeshes } from './targets.js';
 import { FLICK } from './config.js';
 
 const RAD2DEG = 180 / Math.PI;
@@ -8,7 +9,8 @@ function freshStats() {
   return { shots: 0, hits: 0, heads: 0, kills: 0, killTimes: [] };
 }
 
-export function createGame(scene, camera) {
+// worldMeshes: 총알이 막히는 맵 표면(벽·바닥). 탄흔 위치 계산에도 사용
+export function createGame(scene, worldMeshes) {
   const targets = [];
   for (let i = 0; i < FLICK.targetCount; i++) targets.push(createTarget(scene));
 
@@ -101,14 +103,35 @@ export function createGame(scene, camera) {
     }
   }
 
-  function shoot() {
-    if (g.state !== 'playing') return;
+  // origin에서 direction 방향으로 총알 한 발
+  // 반환값: null(플레이 중 아님) 또는
+  //   { point, normal, isTarget, part, damage, killed }  — point가 null이면 아무것도 안 맞음
+  const raycaster = new THREE.Raycaster();
+  function shoot(origin, direction) {
+    if (g.state !== 'playing') return null;
     const s = g.stats;
     s.shots += 1;
-    const r = shootAt(camera, targets);
-    g.lastHit = r;
-    if (!r.hit) return;
 
+    raycaster.set(origin, direction);
+    const hits = raycaster.intersectObjects([...aliveMeshes(targets), ...worldMeshes], false);
+    const first = hits[0];
+    if (!first) {
+      g.lastHit = { hit: false };
+      return { point: null };
+    }
+
+    const normal = first.face
+      ? first.face.normal.clone().transformDirection(first.object.matrixWorld)
+      : null;
+
+    if (!first.object.userData.part) {
+      // 벽·바닥에 맞음
+      g.lastHit = { hit: false };
+      return { point: first.point, normal, isTarget: false };
+    }
+
+    const r = applyHit(first.object, targets);
+    g.lastHit = { hit: true, ...r };
     s.hits += 1;
     if (r.part === 'head') s.heads += 1;
     if (r.killed) {
@@ -116,6 +139,7 @@ export function createGame(scene, camera) {
       s.killTimes.push(g.clock - r.target.spawnedAt);
       spawn(r.target); // 처치하면 바로 다른 자리에 새로 세움
     }
+    return { point: first.point, normal, isTarget: true, ...r };
   }
 
   return {

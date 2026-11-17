@@ -73,3 +73,35 @@ export const CROSSHAIR = {
   centerDot: false,
   outline: true, // 검은 테두리
 };
+
+// ── 6단계: 반동·탄 퍼짐 (발로란트식: 총알만 튀고 화면은 거의 고정) ──
+// 라이엇은 발별 반동 수치를 공개하지 않음 → 공개된 '구조'를 따른 자체 설계값
+//   구조: 위로 오르다 멈춤(고정) → 한쪽으로 흐름(가끔 반대로) → 퍼짐은 발마다 증가 → 쏘지 않으면 회복
+export const RECOIL = {
+  // n발째를 쏜 '뒤에' 위로 더해지는 각도 (도). 이 배열이 끝나면 더 오르지 않음
+  climb: [0.3, 0.42, 0.5, 0.55, 0.55, 0.48, 0.38, 0.25, 0.12],
+  // 상승이 끝난 뒤 발마다 옆으로 흐르는 각도 (도)와 최대 폭
+  drift: 0.22,
+  driftMax: 1.6,
+  driftSwitchChance: 0.1, // 발마다 흐르는 방향이 바뀔 확률 (참고: ValTrainer 10%)
+  // 탄 퍼짐 (도): 첫 발 0.25°, 발마다 증가, 최대 1.0°
+  spreadFirst: 0.25,
+  spreadPerShot: 0.1,
+  spreadMax: 1.0,
+  // 회복 시간 (초): 탭 후 0.375초 ~ 풀 스프레이(25발) 후 1.3초
+  recoverTap: 0.375,
+  recoverFull: 1.3,
+  fullSprayShots: 25,
+  // 화면 흔들림: 발마다 아주 살짝 위로 (도). 크로스헤어는 제자리
+  viewPunch: 0.08,
+};
+
+// ── 6단계: 총알 궤적·탄흔 ──
+export const EFFECTS = {
+  tracerMs: 50,        // 궤적이 보이는 시간
+  tracerColor: 0xffe39a,
+  decalSize: 0.12,     // 탄흔 크기 (m)
+  decalLifeMs: 4000,   // 탄흔이 남아 있는 시간
+  decalMax: 80,        // 동시에 남는 최대 개수
+  missDistance: 100,   // 아무것도 안 맞았을 때 궤적 길이 (m)
+};

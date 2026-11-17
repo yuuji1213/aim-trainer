@@ -25,13 +25,15 @@ export function createScene(canvas) {
   sun.position.set(5, 10, 3);
   scene.add(sun);
 
-  buildRoom(scene);
+  const worldMeshes = buildRoom(scene);
 
-  return { renderer, scene, camera };
+  return { renderer, scene, camera, worldMeshes };
 }
 
+// 총알이 막히는 표면(바닥·벽) 목록을 돌려줌
 function buildRoom(scene) {
   const { width, depth, height } = ROOM;
+  const surfaces = [];
 
   // 바닥 + 격자
   const floor = new THREE.Mesh(
@@ -40,6 +42,7 @@ function buildRoom(scene) {
   );
   floor.rotation.x = -Math.PI / 2;
   scene.add(floor);
+  surfaces.push(floor);
 
   const grid = new THREE.GridHelper(width, width, 0x4a5262, 0x353b47);
   grid.position.y = 0.01;
@@ -60,6 +63,7 @@ function buildRoom(scene) {
     wall.position.set(...pos);
     wall.rotation.y = rotY;
     scene.add(wall);
+    surfaces.push(wall);
 
     // 방향 확인용 세로 띠 (벽 중앙)
     const mark = new THREE.Mesh(
@@ -72,6 +76,9 @@ function buildRoom(scene) {
     mark.translateZ(0.02);
     scene.add(mark);
   }
+
+  scene.updateMatrixWorld(true);
+  return surfaces;
 }
 
 export function handleResize(renderer, camera) {

@@ -70,21 +70,9 @@ function flash(mesh) {
   setTimeout(() => mesh.material.emissive.setHex(0x000000), HIT_FLASH_MS);
 }
 
-// 화면 중앙에서 광선을 쏴서 맞은 부위를 찾고 데미지 적용
-// 반환값: { hit: false } 또는 { hit: true, target, part, damage, killed, hpLeft }
-const raycaster = new THREE.Raycaster();
-const CENTER = new THREE.Vector2(0, 0);
-
-export function shootAt(camera, targets) {
-  raycaster.setFromCamera(CENTER, camera);
-
-  const meshes = [];
-  for (const t of targets) if (t.alive) meshes.push(...t.meshes);
-
-  const hits = raycaster.intersectObjects(meshes, false);
-  if (hits.length === 0) return { hit: false };
-
-  const mesh = hits[0].object;
+// 광선이 표적 부위(mesh)에 맞았을 때 데미지 적용
+// 반환값: { target, part, damage, killed, hpLeft }
+export function applyHit(mesh, targets) {
   const part = mesh.userData.part;
   const target = targets.find((t) => t.meshes.includes(mesh));
   const damage = WEAPON.damage[part];
@@ -95,5 +83,12 @@ export function shootAt(camera, targets) {
   const killed = target.hp <= 0;
   if (killed) target.alive = false;
 
-  return { hit: true, target, part, damage, killed, hpLeft: Math.max(0, target.hp) };
+  return { target, part, damage, killed, hpLeft: Math.max(0, target.hp) };
+}
+
+// 지금 맞을 수 있는(살아 있는) 표적 부위 목록
+export function aliveMeshes(targets) {
+  const list = [];
+  for (const t of targets) if (t.alive) list.push(...t.meshes);
+  return list;
 }

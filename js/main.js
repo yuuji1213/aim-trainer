@@ -1,8 +1,11 @@
-// 초기화 + 게임 루프 (연습 모드 · 5단계: 총 모델 + 탭/연사)
+// 초기화 + 게임 루프 (연습 모드 · 6단계: 반동·탄 퍼짐 + 총알 궤적 + 탄흔)
 import { createScene, handleResize } from './scene.js';
 import { createInput } from './input.js';
 import { createGame } from './game.js';
 import { createWeapon } from './weapon.js';
+import { createEffects } from './effects.js';
+import * as THREE from 'three';
+import { EFFECTS } from './config.js';
 import { applyCrosshair } from './ui.js';
 import { loadBest, saveIfBest, loadSettings, saveSettings } from './storage.js';
 import { SENS_MIN, SENS_MAX, SENS_DEFAULT } from './config.js';
@@ -31,10 +34,11 @@ const el = {
   hudHead: $('hud-head'),
 };
 
-const { renderer, scene, camera } = createScene(el.canvas);
+const { renderer, scene, camera, worldMeshes } = createScene(el.canvas);
 const input = createInput(el.canvas);
-const game = createGame(scene, camera);
+const game = createGame(scene, worldMeshes);
 const weapon = createWeapon();
+const effects = createEffects(scene);
 applyCrosshair($('crosshair'));
 
 // 화면을 두 번 그림: 맵 → (깊이 초기화) → 총
@@ -117,7 +121,11 @@ input.onLockChange((locked) => {
     el.overlay.classList.add('hidden');
     el.rawStatus.textContent = rawLabel(input.state.raw);
     if (game.state === 'paused') game.resume();
-    else if (game.state === 'idle' || game.state === 'ended') game.start();
+    else if (game.state === 'idle' || game.state === 'ended') {
+      weapon.resetRecoil();
+      effects.clear();
+      game.start();
+    }
   } else {
     game.pause();
     showOverlay();
@@ -136,11 +144,37 @@ game.onEnd((stats) => {
 weapon.setCanFire(() => game.state === 'playing');
 input.onTriggerDown(() => weapon.triggerDown());
 input.onTriggerUp(() => weapon.triggerUp());
-weapon.onFire(() => {
+const DEG = Math.PI / 180;
+const _origin = new THREE.Vector3();
+const _dir = new THREE.Vector3();
+const _euler = new THREE.Euler(0, 0, 0, 'YXZ');
+const _ndc = new THREE.Vector3();
+const _muzzleWorld = new THREE.Vector3();
+const _farPoint = new THREE.Vector3();
+
+weapon.onFire((shot) => {
   // 발사 순간의 마우스 움직임까지 반영한 시점으로 판정 (화면 갱신을 기다리지 않음)
   input.applyTo(camera);
   camera.updateMatrixWorld();
-  game.shoot();
+
+  // 실제 총알 방향 = 크로스헤어 방향 + 반동 + 퍼짐 (화면 흔들림은 판정에 넣지 않음)
+  const pitch = input.state.pitch + shot.pitchOffset;
+  const yaw = input.state.yaw + shot.yawOffset;
+  _euler.set(pitch * DEG, -yaw * DEG, 0);
+  _dir.set(0, 0, -1).applyEuler(_euler);
+  camera.getWorldPosition(_origin);
+
+  const r = game.shoot(_origin, _dir);
+  if (!r) return;
+
+  // 궤적 시작점: 화면에 보이는 총구 위치에서 카메라 앞 0.6m 지점
+  weapon.muzzleNDC(_ndc);
+  _muzzleWorld.set(_ndc.x, _ndc.y, 0.5).unproject(camera).sub(_origin).normalize()
+    .multiplyScalar(0.6).add(_origin);
+  const end = r.point ?? _farPoint.copy(_origin).addScaledVector(_dir, EFFECTS.missDistance);
+  effects.spawnTracer(_muzzleWorld, end);
+
+  if (r.point && !r.isTarget && r.normal) effects.spawnDecal(r.point, r.normal);
 });
 
 window.addEventListener('resize', () => {
@@ -175,7 +209,11 @@ function loop(now) {
   input.applyTo(camera);
   camera.updateMatrixWorld();
   weapon.update(dt); // 연사 중이면 여기서 발사
+  effects.update(dt);
   updateHud();
+
+  // 화면만 아주 살짝 튐 (판정·크로스헤어와 무관)
+  camera.rotation.x += weapon.viewPunch * DEG;
 
   renderer.clear();
   renderer.render(scene, camera);

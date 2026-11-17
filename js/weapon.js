@@ -1,8 +1,15 @@
-// 무기: 탭/연사 발사 타이밍, 오리지널 총 모델(뷰모델), 발사 모션
+// 무기: 탭/연사 발사 타이밍, 반동·탄 퍼짐, 오리지널 총 모델(뷰모델), 발사 모션
 // 성능은 밴달 수치(config.js WEAPON), 모양은 도형으로 만든 오리지널 디자인
 // 무한 탄창: 탄 수·재장전 없음
 import * as THREE from 'three';
-import { WEAPON } from './config.js';
+import { WEAPON, RECOIL } from './config.js';
+
+// 원 안에 고르게 퍼지는 랜덤 점 (반지름 r)
+function randomInCircle(r) {
+  const a = Math.random() * Math.PI * 2;
+  const d = Math.sqrt(Math.random()) * r;
+  return { x: Math.cos(a) * d, y: Math.sin(a) * d };
+}
 
 const SHOT_INTERVAL = 1 / WEAPON.fireRate; // 초
 
@@ -75,11 +82,76 @@ export function createWeapon() {
   let canFire = () => true;
   const fireListeners = [];
 
+  // ── 반동 상태 (단위: 도) ──
+  const recoil = {
+    shots: 0,        // 이번 연사에서 쏜 발 수 (회복되면 줄어듦)
+    pitch: 0,        // 위로 쌓인 반동
+    yaw: 0,          // 옆으로 쌓인 반동 (+ = 오른쪽)
+    side: 1,         // 흐르는 방향
+    lastShotAt: -Infinity,
+    recovering: false,
+    rec: null,       // 회복 시작 시점의 값 { shots, pitch, yaw, time }
+    punch: 0,        // 화면 흔들림
+  };
+
+  function resetRecoil() {
+    Object.assign(recoil, { shots: 0, pitch: 0, yaw: 0, side: Math.random() < 0.5 ? -1 : 1,
+      lastShotAt: -Infinity, recovering: false, rec: null, punch: 0 });
+  }
+  resetRecoil();
+
   function fire() {
+    const n = Math.floor(recoil.shots); // 0 = 첫 발
+
+    // 1) 이번 발의 방향: 지금까지 쌓인 반동 + 랜덤 퍼짐
+    const spread = Math.min(RECOIL.spreadMax, RECOIL.spreadFirst + RECOIL.spreadPerShot * n);
+    const jitter = randomInCircle(spread);
+    const shot = { pitchOffset: recoil.pitch + jitter.y, yawOffset: recoil.yaw + jitter.x, spread };
+
+    // 2) 다음 발을 위해 반동 쌓기
+    if (n < RECOIL.climb.length) {
+      recoil.pitch += RECOIL.climb[n];
+    } else {
+      if (Math.random() < RECOIL.driftSwitchChance) recoil.side *= -1;
+      recoil.yaw += RECOIL.drift * recoil.side;
+      if (Math.abs(recoil.yaw) >= RECOIL.driftMax) {
+        recoil.yaw = Math.sign(recoil.yaw) * RECOIL.driftMax;
+        recoil.side *= -1; // 끝까지 가면 반대로
+      }
+    }
+    recoil.shots = n + 1;
+    recoil.lastShotAt = clock;
+    recoil.recovering = false;
+    recoil.punch += RECOIL.viewPunch;
+
+    // 3) 모션
     kick = 0.035;
     flashLeft = 0.04;
     flash.rotation.z = Math.random() * Math.PI;
-    fireListeners.forEach((fn) => fn());
+    fireListeners.forEach((fn) => fn(shot));
+  }
+
+  // 쏘지 않으면 탭 후 0.375초 ~ 풀 스프레이 후 1.3초에 걸쳐 원래대로
+  function updateRecovery(dt) {
+    const idle = clock - recoil.lastShotAt > SHOT_INTERVAL * 1.05;
+    if (!idle || recoil.shots === 0) return;
+
+    if (!recoil.recovering) {
+      const t = Math.min(1, Math.max(0, (recoil.shots - 1) / (RECOIL.fullSprayShots - 1)));
+      recoil.recovering = true;
+      // 회복 시간은 '마지막 발사 시점'부터 잼 → 연사가 끊겼다고 판단하기까지 걸린 시간을 뺌
+      const total = RECOIL.recoverTap + (RECOIL.recoverFull - RECOIL.recoverTap) * t;
+      recoil.rec = {
+        shots: recoil.shots, pitch: recoil.pitch, yaw: recoil.yaw,
+        time: Math.max(0.05, total - (clock - recoil.lastShotAt)),
+      };
+    }
+    const r = recoil.rec;
+    const k = dt / r.time; // 이번 프레임에 회복할 비율
+    recoil.pitch = Math.max(0, recoil.pitch - r.pitch * k);
+    recoil.yaw = Math.abs(recoil.yaw) <= Math.abs(r.yaw * k) ? 0 : recoil.yaw - r.yaw * k;
+    recoil.shots = Math.max(0, recoil.shots - r.shots * k);
+    if (recoil.shots === 0) { recoil.pitch = 0; recoil.yaw = 0; recoil.recovering = false; }
   }
 
   // 누르는 순간: 쏠 수 있으면 즉시 1발 (탭)
@@ -108,6 +180,9 @@ export function createWeapon() {
       }
     }
 
+    updateRecovery(dt);
+    recoil.punch *= Math.exp(-dt * 18);
+
     // 발사 모션 회복
     kick *= Math.exp(-dt * 22);
     group.position.z = BASE.z + kick;
@@ -115,6 +190,14 @@ export function createWeapon() {
 
     flashLeft -= dt;
     flash.visible = flashLeft > 0;
+  }
+
+  // 총구가 화면 어디에 있는지 (NDC 좌표) — 총알 궤적 시작점 계산용
+  const _muzzle = new THREE.Vector3();
+  function muzzleNDC(out) {
+    group.updateMatrixWorld(true);
+    flash.getWorldPosition(_muzzle);
+    return out.copy(_muzzle).project(camera);
   }
 
   function render(renderer) {
@@ -133,6 +216,10 @@ export function createWeapon() {
     update,
     render,
     resize,
+    muzzleNDC,
+    resetRecoil,
+    get viewPunch() { return recoil.punch; },
+    get recoilState() { return recoil; },
     setCanFire: (fn) => { canFire = fn; },
     onFire: (fn) => fireListeners.push(fn),
   };
