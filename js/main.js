@@ -1,9 +1,10 @@
-// 초기화 + 게임 루프 (연습 모드 · 6단계: 반동(7자 패턴, 화면 따라감)·탄 퍼짐 + 총알 궤적 + 탄흔)
+// 초기화 + 게임 루프 (연습 모드 · 7단계: WASD 이동)
 import { createScene, handleResize } from './scene.js';
 import { createInput } from './input.js';
 import { createGame } from './game.js';
 import { createWeapon } from './weapon.js';
 import { createEffects } from './effects.js';
+import { createMovement } from './movement.js';
 import * as THREE from 'three';
 import { EFFECTS } from './config.js';
 import { applyCrosshair } from './ui.js';
@@ -33,6 +34,8 @@ const el = {
   hudAcc: $('hud-acc'),
   hudHead: $('hud-head'),
   hudClick: $('hud-click'),
+  hudSpeed: $('hud-speed'),
+  hudAcc2: $('hud-accurate'),
 };
 
 const { renderer, scene, camera, worldMeshes } = createScene(el.canvas);
@@ -40,6 +43,8 @@ const input = createInput(el.canvas);
 const game = createGame(scene, worldMeshes);
 const weapon = createWeapon();
 const effects = createEffects(scene);
+const movement = createMovement(camera);
+weapon.setExtraSpread(() => movement.moveSpread());
 applyCrosshair($('crosshair'));
 
 // 화면을 두 번 그림: 맵 → (깊이 초기화) → 총
@@ -118,6 +123,7 @@ el.startBtn.addEventListener('click', async () => {
 });
 
 input.onLockChange((locked) => {
+  movement.setEnabled(locked);
   if (locked) {
     el.overlay.classList.add('hidden');
     el.rawStatus.textContent = rawLabel(input.state.raw);
@@ -125,6 +131,7 @@ input.onLockChange((locked) => {
     else if (game.state === 'idle' || game.state === 'ended') {
       weapon.resetRecoil();
       effects.clear();
+      movement.reset();
       game.start();
     }
   } else {
@@ -207,6 +214,10 @@ function updateHud() {
   el.hudAcc.textContent = pctText(pct(s.hits, s.shots));
   el.hudHead.textContent = pctText(pct(s.heads, s.hits));
   el.timer.textContent = Math.ceil(game.timeLeft);
+  el.hudSpeed.textContent = movement.speed().toFixed(1);
+  const ok = movement.accurate();
+  el.hudAcc2.textContent = ok ? '정확' : '부정확';
+  el.hudAcc2.className = ok ? 'ok' : 'bad';
   el.centerMsg.textContent = game.state === 'countdown' ? Math.ceil(game.countdownLeft) : '';
 }
 
@@ -218,6 +229,8 @@ function loop(now) {
   prev = now;
 
   game.update(dt);
+  // 카운트다운·플레이 중에만 이동 (일시정지·결과 화면에서는 멈춤)
+  if (game.state === 'countdown' || game.state === 'playing') movement.update(dt, input.state.yaw);
   input.applyTo(camera);
   camera.updateMatrixWorld();
   weapon.update(dt); // 연사 중이면 여기서 발사

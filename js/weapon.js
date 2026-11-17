@@ -83,6 +83,7 @@ export function createWeapon() {
   let kick = 0;           // 발사 모션 크기 (뒤로 밀림)
   let flashLeft = 0;      // 총구 섬광 남은 시간
   let canFire = () => true;
+  let extraSpread = () => 0; // 이동 중 추가 퍼짐 (movement.js에서 연결)
   const fireListeners = [];
 
   // ── 반동 상태 (단위: 도) ──
@@ -118,7 +119,7 @@ export function createWeapon() {
     const [py, pp] = patternAt(n);
 
     // 이번 발의 방향: 패턴 위치 + 랜덤 퍼짐
-    const spread = Math.min(RECOIL.spreadMax, RECOIL.spreadFirst + RECOIL.spreadPerShot * n);
+    const spread = Math.min(RECOIL.spreadMax, RECOIL.spreadFirst + RECOIL.spreadPerShot * n) + extraSpread();
     const jitter = randomInCircle(spread / 2);
     const shot = { pitchOffset: pp + jitter.y, yawOffset: py + jitter.x, spread };
 
@@ -231,6 +232,7 @@ export function createWeapon() {
     get viewYaw() { return recoil.viewYaw; },
     get recoilState() { return recoil; },
     setCanFire: (fn) => { canFire = fn; },
+    setExtraSpread: (fn) => { extraSpread = fn; },
     onFire: (fn) => fireListeners.push(fn),
   };
 }

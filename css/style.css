@@ -81,6 +81,8 @@ html, body {
 }
 
 #hud .dim { color: #8a93a3; }
+#hud .ok { color: #5fe3a1; }
+#hud .bad { color: #ff7a7a; }
 
 #hud hr {
   border: none;
