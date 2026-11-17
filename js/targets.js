@@ -1,4 +1,5 @@
-// 사람형 표적: 생성, 부위별 데미지 판정, 처치 후 재등장
+// 사람형 표적: 생성, 배치, 부위별 데미지 판정
+// 언제 어디에 다시 세울지는 game.js가 정한다
 import * as THREE from 'three';
 import {
   TARGET_HP,
@@ -6,7 +7,6 @@ import {
   TARGET_COLOR,
   HIT_FLASH_COLOR,
   HIT_FLASH_MS,
-  RESPAWN_MS,
   WEAPON,
 } from './config.js';
 
@@ -22,7 +22,8 @@ function makePart(geometry, part, x, y) {
   return mesh;
 }
 
-export function createTarget(scene, position) {
+// 처음에는 숨긴 상태로 만든다. placeTarget으로 세워야 보임
+export function createTarget(scene) {
   const { legs, body, head } = TARGET_SHAPE;
   const group = new THREE.Group();
 
@@ -33,16 +34,34 @@ export function createTarget(scene, position) {
   group.add(makePart(new THREE.CapsuleGeometry(body.radius, body.length, 4, 16), 'body', 0, body.centerY));
   group.add(makePart(new THREE.SphereGeometry(head.radius, 20, 16), 'head', 0, head.centerY));
 
-  group.position.set(position.x, 0, position.z);
+  group.visible = false;
   scene.add(group);
 
-  const target = {
+  return {
     group,
     meshes: group.children,
     hp: TARGET_HP,
-    alive: true,
+    alive: false,
+    spawnedAt: 0, // game.js의 게임 시계 기준 (초)
   };
-  return target;
+}
+
+// 지정 위치에 체력을 채워서 세운다
+export function placeTarget(target, x, z) {
+  target.group.position.set(x, 0, z);
+  // 표적이 항상 플레이어(원점)를 바라보게
+  target.group.rotation.y = Math.atan2(-x, -z);
+  target.hp = TARGET_HP;
+  target.alive = true;
+  target.group.visible = true;
+  target.meshes.forEach((m) => m.material.emissive.setHex(0x000000));
+  // 다음 화면을 그리기 전에 쏴도 새 위치로 판정되게 즉시 갱신
+  target.group.updateMatrixWorld(true);
+}
+
+export function hideTarget(target) {
+  target.alive = false;
+  target.group.visible = false;
 }
 
 // 맞은 부위를 잠깐 빨갛게
@@ -52,7 +71,7 @@ function flash(mesh) {
 }
 
 // 화면 중앙에서 광선을 쏴서 맞은 부위를 찾고 데미지 적용
-// 반환값: { hit: false } 또는 { hit: true, part, damage, killed, hpLeft }
+// 반환값: { hit: false } 또는 { hit: true, target, part, damage, killed, hpLeft }
 const raycaster = new THREE.Raycaster();
 const CENTER = new THREE.Vector2(0, 0);
 
@@ -74,17 +93,7 @@ export function shootAt(camera, targets) {
   flash(mesh);
 
   const killed = target.hp <= 0;
-  if (killed) kill(target);
+  if (killed) target.alive = false;
 
-  return { hit: true, part, damage, killed, hpLeft: Math.max(0, target.hp) };
-}
-
-function kill(target) {
-  target.alive = false;
-  target.group.visible = false;
-  setTimeout(() => {
-    target.hp = TARGET_HP;
-    target.alive = true;
-    target.group.visible = true;
-  }, RESPAWN_MS);
+  return { hit: true, target, part, damage, killed, hpLeft: Math.max(0, target.hp) };
 }

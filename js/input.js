@@ -33,9 +33,12 @@ export function createInput(canvas) {
         if (fallback && typeof fallback.then === 'function') await fallback;
         state.raw = false;
       } catch (err2) {
+        // ESC로 나온 직후 바로 다시 누르면 브라우저가 잠깐 거부함
         console.warn('포인터 락 실패:', err2);
+        return false;
       }
     }
+    return true;
   }
 
   document.addEventListener('pointerlockchange', () => {

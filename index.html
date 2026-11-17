@@ -25,6 +25,10 @@
     <span class="ch-dot"></span>
   </div>
 
+  <!-- 남은 시간 / 카운트다운 -->
+  <div id="timer">60</div>
+  <div id="center-msg"></div>
+
   <!-- 테스트용 HUD -->
   <div id="hud">
     <div>yaw <span id="hud-yaw">0.0</span>°</div>
@@ -32,7 +36,6 @@
     <div>감도 <span id="hud-sens">-</span></div>
     <div>원시 입력 <span id="hud-raw">-</span></div>
     <hr>
-    <div>표적 HP <span id="hud-target-hp">-</span></div>
     <div>마지막 사격 <span id="hud-last-hit">-</span></div>
     <div>발사 <span id="hud-shots">0</span> · 명중 <span id="hud-hits">0</span> · 헤드 <span id="hud-heads">0</span> · 처치 <span id="hud-kills">0</span></div>
   </div>
@@ -40,7 +43,8 @@
   <!-- 시작 / 일시정지 화면 -->
   <div id="overlay">
     <div class="panel">
-      <h1>에임 트레이너 <small>2단계 테스트</small></h1>
+      <h1><span id="overlay-title">플릭 모드</span> <small>3단계 테스트</small></h1>
+      <p id="overlay-info" class="info"></p>
       <label class="row">
         발로란트 감도
         <input id="sens-input" type="number" min="0.01" max="10" step="0.01">
@@ -50,10 +54,12 @@
         벽의 색 띠: 앞 빨강(0°) · 오른쪽 초록(90°) · 뒤 파랑(180°) · 왼쪽 노랑(270°)
       </p>
       <p class="hint">
-        좌클릭 1번 = 1발 (밴달 · 머리 160 / 몸 40 / 다리 34 · 표적 체력 150)
+        좌클릭 1번 = 1발 (밴달 · 머리 160 / 몸 40 / 다리 34 · 표적 체력 150)<br>
+        60초 동안 표적 3개를 최대한 많이 처치하세요.
       </p>
       <button id="start-btn">클릭해서 시작</button>
-      <p class="hint">ESC를 누르면 이 화면으로 돌아옵니다.</p>
+      <p id="lock-hint" class="hint warn"></p>
+      <p class="hint">ESC를 누르면 일시정지됩니다.</p>
     </div>
   </div>
 

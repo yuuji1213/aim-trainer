@@ -52,9 +52,16 @@ export const TARGET_COLOR = 0xd8d2c4;
 export const HIT_FLASH_COLOR = 0xff3344;
 export const HIT_FLASH_MS = 80;
 
-// 2단계 테스트용 표적 위치 (정면 10m)와 처치 후 재등장 대기 시간
-export const TEST_TARGET_POS = { x: 0, z: -10 };
-export const RESPAWN_MS = 600;
+// ── 3단계: 플릭 모드 ──────────────────────────────
+export const FLICK = {
+  targetCount: 3,   // 동시에 서 있는 표적 수
+  duration: 60,     // 제한 시간 (초)
+  countdown: 3,     // 시작 전 카운트다운 (초)
+  // 표적이 생기는 범위 (m). 사람형이라 높이 대신 좌우 위치와 거리를 랜덤으로
+  spawn: { xMin: -5, xMax: 5, zNear: -8, zFar: -14 },
+  // 표적끼리 겹쳐 보이지 않게, 플레이어 기준 좌우 각도가 이만큼은 떨어지게 (도)
+  minAngleDeg: 6,
+};
 
 // 크로스헤어 (설정 화면은 4단계에서 추가, 지금은 여기서만 변경)
 export const CROSSHAIR = {

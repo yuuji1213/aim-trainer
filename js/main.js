@@ -1,21 +1,25 @@
-// 초기화 + 게임 루프 (2단계: 크로스헤어 + 사람형 표적 + 부위별 데미지)
+// 초기화 + 게임 루프 (3단계: 플릭 모드)
 import { createScene, handleResize } from './scene.js';
 import { createInput } from './input.js';
-import { createTarget, shootAt } from './targets.js';
+import { createGame } from './game.js';
 import { applyCrosshair, partLabel } from './ui.js';
-import { SENS_MIN, SENS_MAX, SENS_DEFAULT, TEST_TARGET_POS, TARGET_HP } from './config.js';
+import { SENS_MIN, SENS_MAX, SENS_DEFAULT } from './config.js';
 
-const canvas = document.getElementById('game');
-const overlay = document.getElementById('overlay');
-const startBtn = document.getElementById('start-btn');
-const sensInput = document.getElementById('sens-input');
 const $ = (id) => document.getElementById(id);
+const canvas = $('game');
+const overlay = $('overlay');
+const startBtn = $('start-btn');
+const sensInput = $('sens-input');
+const overlayTitle = $('overlay-title');
+const overlayInfo = $('overlay-info');
+const lockHint = $('lock-hint');
+const timerEl = $('timer');
+const centerMsg = $('center-msg');
 const hud = {
   yaw: $('hud-yaw'),
   pitch: $('hud-pitch'),
   sens: $('hud-sens'),
   raw: $('hud-raw'),
-  targetHp: $('hud-target-hp'),
   lastHit: $('hud-last-hit'),
   shots: $('hud-shots'),
   hits: $('hud-hits'),
@@ -25,27 +29,8 @@ const hud = {
 
 const { renderer, scene, camera } = createScene(canvas);
 const input = createInput(canvas);
+const game = createGame(scene, camera);
 applyCrosshair($('crosshair'));
-
-// 2단계 테스트용 표적 1개
-const targets = [createTarget(scene, TEST_TARGET_POS)];
-
-// 2단계 확인용 집계 (정식 기록 화면은 4단계)
-const stats = { shots: 0, hits: 0, heads: 0, kills: 0 };
-let lastHitText = '-';
-
-input.onShoot(() => {
-  stats.shots += 1;
-  const r = shootAt(camera, targets);
-  if (!r.hit) {
-    lastHitText = '빗나감';
-    return;
-  }
-  stats.hits += 1;
-  if (r.part === 'head') stats.heads += 1;
-  if (r.killed) stats.kills += 1;
-  lastHitText = `${partLabel(r.part)} ${r.damage}${r.killed ? ' · 처치' : ''}`;
-});
 
 sensInput.value = SENS_DEFAULT;
 
@@ -55,42 +40,110 @@ function readSens() {
   return Math.min(SENS_MAX, Math.max(SENS_MIN, v));
 }
 
-startBtn.addEventListener('click', () => {
+// ── 시작 / 일시정지 / 종료 화면 ──
+function pct(a, b) {
+  return b > 0 ? `${Math.round((a / b) * 100)}%` : '-';
+}
+
+function showOverlay() {
+  const s = game.stats;
+  if (game.state === 'paused') {
+    overlayTitle.textContent = '일시정지';
+    overlayInfo.textContent = '';
+    startBtn.textContent = '클릭해서 계속';
+  } else if (game.state === 'ended') {
+    overlayTitle.textContent = '종료';
+    // 정식 결과 화면은 4단계에서
+    overlayInfo.textContent =
+      `처치 ${s.kills} · 명중률 ${pct(s.hits, s.shots)} · 헤드샷률 ${pct(s.heads, s.hits)}`;
+    startBtn.textContent = '다시하기';
+  } else {
+    overlayTitle.textContent = '플릭 모드';
+    overlayInfo.textContent = '';
+    startBtn.textContent = '클릭해서 시작';
+  }
+  lockHint.textContent = '';
+  overlay.classList.remove('hidden');
+}
+
+startBtn.addEventListener('click', async () => {
   input.state.sens = readSens();
   sensInput.value = input.state.sens;
-  input.requestLock();
+  const ok = await input.requestLock();
+  if (!ok) lockHint.textContent = '잠시 후 다시 눌러주세요.';
 });
 
 input.onLockChange((locked) => {
-  overlay.classList.toggle('hidden', locked);
+  if (locked) {
+    overlay.classList.add('hidden');
+    if (game.state === 'paused') game.resume();
+    else if (game.state === 'idle' || game.state === 'ended') game.start();
+  } else {
+    game.pause();
+    showOverlay();
+  }
+});
+
+game.onEnd(() => {
+  // 마우스 잠금을 풀면 onLockChange에서 종료 화면이 뜸
+  if (document.pointerLockElement) document.exitPointerLock();
+  else showOverlay();
+});
+
+input.onShoot(() => {
+  // 클릭 직전 마우스 움직임까지 반영한 시점으로 판정 (화면 갱신을 기다리지 않음)
+  input.applyTo(camera);
+  camera.updateMatrixWorld();
+  game.shoot();
 });
 
 window.addEventListener('resize', () => handleResize(renderer, camera));
 
+// ── HUD ──
 function rawLabel(raw) {
   if (raw === true) return '사용 중';
   if (raw === false) return '미지원';
   return '확인 불가';
 }
 
-function loop() {
-  input.applyTo(camera);
+function lastHitLabel(r) {
+  if (!r) return '-';
+  if (!r.hit) return '빗나감';
+  return `${partLabel(r.part)} ${r.damage}${r.killed ? ' · 처치' : ''}`;
+}
 
+function updateHud() {
   hud.yaw.textContent = input.normalizedYaw().toFixed(1);
   hud.pitch.textContent = input.state.pitch.toFixed(1);
   hud.sens.textContent = input.state.sens.toFixed(2);
   hud.raw.textContent = rawLabel(input.state.raw);
 
-  const t = targets[0];
-  hud.targetHp.textContent = t.alive ? `${t.hp} / ${TARGET_HP}` : '재등장 대기';
-  hud.lastHit.textContent = lastHitText;
-  hud.shots.textContent = stats.shots;
-  hud.hits.textContent = stats.hits;
-  hud.heads.textContent = stats.heads;
-  hud.kills.textContent = stats.kills;
+  const s = game.stats;
+  hud.lastHit.textContent = lastHitLabel(game.lastHit);
+  hud.shots.textContent = s.shots;
+  hud.hits.textContent = s.hits;
+  hud.heads.textContent = s.heads;
+  hud.kills.textContent = s.kills;
+
+  timerEl.textContent = Math.ceil(game.timeLeft);
+
+  // 카운트다운 숫자
+  centerMsg.textContent = game.state === 'countdown' ? Math.ceil(game.countdownLeft) : '';
+}
+
+// ── 게임 루프 ──
+let prev = performance.now();
+function loop(now) {
+  // 탭 전환 등으로 프레임이 크게 밀려도 한 번에 0.1초 이상은 진행하지 않음
+  const dt = Math.min((now - prev) / 1000, 0.1);
+  prev = now;
+
+  game.update(dt);
+  input.applyTo(camera);
+  updateHud();
 
   renderer.render(scene, camera);
   requestAnimationFrame(loop);
 }
 
-loop();
+requestAnimationFrame(loop);
