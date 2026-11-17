@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>에임 트레이너 (가칭)</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- 임시 중앙점: 2단계에서 크로스헤어로 교체 -->
+  <div id="center-dot"></div>
+
+  <!-- 1단계 테스트용 HUD -->
+  <div id="hud">
+    <div>yaw <span id="hud-yaw">0.0</span>°</div>
+    <div>pitch <span id="hud-pitch">0.0</span>°</div>
+    <div>감도 <span id="hud-sens">-</span></div>
+    <div>원시 입력 <span id="hud-raw">-</span></div>
+  </div>
+
+  <!-- 시작 / 일시정지 화면 -->
+  <div id="overlay">
+    <div class="panel">
+      <h1>에임 트레이너 <small>1단계 테스트</small></h1>
+      <label class="row">
+        발로란트 감도
+        <input id="sens-input" type="number" min="0.01" max="10" step="0.01">
+      </label>
+      <p class="hint">
+        발로란트와 같은 마우스 DPI에서 같은 감도 숫자를 넣으면 됩니다.<br>
+        벽의 색 띠: 앞 빨강(0°) · 오른쪽 초록(90°) · 뒤 파랑(180°) · 왼쪽 노랑(270°)
+      </p>
+      <button id="start-btn">클릭해서 시작</button>
+      <p class="hint">ESC를 누르면 이 화면으로 돌아옵니다.</p>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
