@@ -1,7 +1,8 @@
-// 초기화 + 게임 루프 (4단계: 결과 화면, 최고 기록, 설정 저장)
+// 초기화 + 게임 루프 (연습 모드 · 5단계: 총 모델 + 탭/연사)
 import { createScene, handleResize } from './scene.js';
 import { createInput } from './input.js';
 import { createGame } from './game.js';
+import { createWeapon } from './weapon.js';
 import { applyCrosshair } from './ui.js';
 import { loadBest, saveIfBest, loadSettings, saveSettings } from './storage.js';
 import { SENS_MIN, SENS_MAX, SENS_DEFAULT } from './config.js';
@@ -33,7 +34,11 @@ const el = {
 const { renderer, scene, camera } = createScene(el.canvas);
 const input = createInput(el.canvas);
 const game = createGame(scene, camera);
+const weapon = createWeapon();
 applyCrosshair($('crosshair'));
+
+// 화면을 두 번 그림: 맵 → (깊이 초기화) → 총
+renderer.autoClear = false;
 
 // ── 설정 (감도) ──
 function clampSens(v) {
@@ -90,7 +95,7 @@ function showOverlay() {
     el.resTtk.textContent = lastResult.avgKillMs === null ? '-' : `${lastResult.avgKillMs} ms`;
     el.resShots.textContent = `${lastResult.shots} / ${lastResult.hits}`;
   } else {
-    el.title.textContent = '플릭 모드';
+    el.title.textContent = '연습 모드';
     el.startBtn.textContent = '클릭해서 시작';
   }
 
@@ -127,14 +132,21 @@ game.onEnd((stats) => {
   else showOverlay();
 });
 
-input.onShoot(() => {
-  // 클릭 직전 마우스 움직임까지 반영한 시점으로 판정 (화면 갱신을 기다리지 않음)
+// ── 사격 ──
+weapon.setCanFire(() => game.state === 'playing');
+input.onTriggerDown(() => weapon.triggerDown());
+input.onTriggerUp(() => weapon.triggerUp());
+weapon.onFire(() => {
+  // 발사 순간의 마우스 움직임까지 반영한 시점으로 판정 (화면 갱신을 기다리지 않음)
   input.applyTo(camera);
   camera.updateMatrixWorld();
   game.shoot();
 });
 
-window.addEventListener('resize', () => handleResize(renderer, camera));
+window.addEventListener('resize', () => {
+  handleResize(renderer, camera);
+  weapon.resize();
+});
 
 function rawLabel(raw) {
   if (raw === true) return '사용 중';
@@ -161,9 +173,13 @@ function loop(now) {
 
   game.update(dt);
   input.applyTo(camera);
+  camera.updateMatrixWorld();
+  weapon.update(dt); // 연사 중이면 여기서 발사
   updateHud();
 
+  renderer.clear();
   renderer.render(scene, camera);
+  weapon.render(renderer);
   requestAnimationFrame(loop);
 }
 

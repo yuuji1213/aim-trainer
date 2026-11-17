@@ -1,7 +1,5 @@
 // 포인터 락 + 발로란트 감도 공식으로 시점 회전
-import { VALORANT_YAW, PITCH_LIMIT, WEAPON } from './config.js';
-
-const MIN_SHOT_INTERVAL_MS = 1000 / WEAPON.fireRate; // 밴달 연사 속도보다 빠르게는 못 쏨
+import { VALORANT_YAW, PITCH_LIMIT } from './config.js';
 
 export function createInput(canvas) {
   const state = {
@@ -12,8 +10,14 @@ export function createInput(canvas) {
     raw: null,   // true: 원시 입력 확인됨 / false: 미지원 / null: 확인 불가
   };
 
-  const listeners = { lockChange: [], shoot: [] };
-  let lastShotAt = -Infinity;
+  const listeners = { lockChange: [], triggerDown: [], triggerUp: [] };
+  let triggerHeld = false;
+
+  function releaseTrigger() {
+    if (!triggerHeld) return;
+    triggerHeld = false;
+    listeners.triggerUp.forEach((fn) => fn());
+  }
 
   // 포인터 락 요청: 원시 입력(unadjustedMovement)을 먼저 시도하고, 안 되면 일반 방식
   async function requestLock() {
@@ -43,6 +47,7 @@ export function createInput(canvas) {
 
   document.addEventListener('pointerlockchange', () => {
     state.locked = document.pointerLockElement === canvas;
+    if (!state.locked) releaseTrigger(); // ESC로 나가면 방아쇠도 놓은 것으로
     listeners.lockChange.forEach((fn) => fn(state.locked));
   });
 
@@ -54,13 +59,16 @@ export function createInput(canvas) {
     state.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, state.pitch));
   });
 
-  // 좌클릭 = 1발 (탭 사격). 누르고 있어도 연사되지 않음
+  // 좌클릭 = 방아쇠. 짧게 누르면 1발(탭), 누르고 있으면 연사 (발사 간격은 weapon.js가 관리)
   document.addEventListener('mousedown', (e) => {
     if (!state.locked || e.button !== 0) return;
-    const now = performance.now();
-    if (now - lastShotAt < MIN_SHOT_INTERVAL_MS) return;
-    lastShotAt = now;
-    listeners.shoot.forEach((fn) => fn());
+    triggerHeld = true;
+    listeners.triggerDown.forEach((fn) => fn());
+  });
+
+  document.addEventListener('mouseup', (e) => {
+    if (e.button !== 0) return;
+    releaseTrigger();
   });
 
   // 카메라에 현재 시점 적용 (Three.js 회전은 라디안, 오른쪽 회전 = -Y)
@@ -80,6 +88,7 @@ export function createInput(canvas) {
     applyTo,
     normalizedYaw,
     onLockChange: (fn) => listeners.lockChange.push(fn),
-    onShoot: (fn) => listeners.shoot.push(fn),
+    onTriggerDown: (fn) => listeners.triggerDown.push(fn),
+    onTriggerUp: (fn) => listeners.triggerUp.push(fn),
   };
 }
