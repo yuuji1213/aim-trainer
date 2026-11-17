@@ -97,9 +97,11 @@ export const RECOIL = {
   spreadFirst: 0.25,
   spreadPerShot: 0.1,
   spreadMax: 1.0,
-  // 회복 시간 (초): 탭 후 0.375초 ~ 풀 스프레이(25발) 후 1.3초
+  // 회복 시간 (초): 마지막 발사부터 반동이 0으로 돌아오기까지
+  // 출처가 있는 값은 Liquipedia 패치 내역의 '반동 회복 0.375초' 하나뿐이라 연사 길이와 관계없이 0.375초 적용
+  // (예전 값 1.3초는 팬 제작 연습기의 재구성값). 긴 연사를 더 느리게 하려면 recoverFull만 키우면 됨
   recoverTap: 0.375,
-  recoverFull: 1.3,
+  recoverFull: 0.375,
   fullSprayShots: 25,
 };
 
