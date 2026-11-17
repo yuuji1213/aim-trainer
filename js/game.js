@@ -29,7 +29,7 @@ export function createGame(scene, camera) {
 
   // 다른 표적, 그리고 자기 이전 자리와 겹치지 않는 위치 고르기
   function pickPosition(self) {
-    const { xMin, xMax, zNear, zFar } = FLICK.spawn;
+    const { xMin, xMax, z } = FLICK.spawn;
     const taken = [];
     for (const t of targets) {
       // 다른 표적: 서 있는 것만 피함
@@ -39,10 +39,8 @@ export function createGame(scene, camera) {
     }
 
     let x = 0;
-    let z = zNear;
     for (let tries = 0; tries < 50; tries++) {
       x = xMin + Math.random() * (xMax - xMin);
-      z = zFar + Math.random() * (zNear - zFar);
       const a = angleOf(x, z);
       if (taken.every((b) => Math.abs(a - b) >= FLICK.minAngleDeg)) break;
     }

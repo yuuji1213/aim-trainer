@@ -1,81 +1,116 @@
-// 초기화 + 게임 루프 (3단계: 플릭 모드)
+// 초기화 + 게임 루프 (4단계: 결과 화면, 최고 기록, 설정 저장)
 import { createScene, handleResize } from './scene.js';
 import { createInput } from './input.js';
 import { createGame } from './game.js';
-import { applyCrosshair, partLabel } from './ui.js';
+import { applyCrosshair } from './ui.js';
+import { loadBest, saveIfBest, loadSettings, saveSettings } from './storage.js';
 import { SENS_MIN, SENS_MAX, SENS_DEFAULT } from './config.js';
 
 const $ = (id) => document.getElementById(id);
-const canvas = $('game');
-const overlay = $('overlay');
-const startBtn = $('start-btn');
-const sensInput = $('sens-input');
-const overlayTitle = $('overlay-title');
-const overlayInfo = $('overlay-info');
-const lockHint = $('lock-hint');
-const timerEl = $('timer');
-const centerMsg = $('center-msg');
-const hud = {
-  yaw: $('hud-yaw'),
-  pitch: $('hud-pitch'),
-  sens: $('hud-sens'),
-  raw: $('hud-raw'),
-  lastHit: $('hud-last-hit'),
-  shots: $('hud-shots'),
-  hits: $('hud-hits'),
-  heads: $('hud-heads'),
-  kills: $('hud-kills'),
+const el = {
+  canvas: $('game'),
+  overlay: $('overlay'),
+  title: $('overlay-title'),
+  result: $('result'),
+  newRecord: $('new-record'),
+  resKills: $('res-kills'),
+  resAcc: $('res-acc'),
+  resHead: $('res-head'),
+  resTtk: $('res-ttk'),
+  resShots: $('res-shots'),
+  bestLine: $('best-line'),
+  sens: $('sens-input'),
+  startBtn: $('start-btn'),
+  lockHint: $('lock-hint'),
+  rawStatus: $('raw-status'),
+  timer: $('timer'),
+  centerMsg: $('center-msg'),
+  hudKills: $('hud-kills'),
+  hudAcc: $('hud-acc'),
+  hudHead: $('hud-head'),
 };
 
-const { renderer, scene, camera } = createScene(canvas);
-const input = createInput(canvas);
+const { renderer, scene, camera } = createScene(el.canvas);
+const input = createInput(el.canvas);
 const game = createGame(scene, camera);
 applyCrosshair($('crosshair'));
 
-sensInput.value = SENS_DEFAULT;
-
-function readSens() {
-  const v = parseFloat(sensInput.value);
+// ── 설정 (감도) ──
+function clampSens(v) {
   if (Number.isNaN(v)) return SENS_DEFAULT;
   return Math.min(SENS_MAX, Math.max(SENS_MIN, v));
 }
+input.state.sens = clampSens(parseFloat(loadSettings().sens ?? SENS_DEFAULT));
+el.sens.value = input.state.sens;
 
-// ── 시작 / 일시정지 / 종료 화면 ──
-function pct(a, b) {
-  return b > 0 ? `${Math.round((a / b) * 100)}%` : '-';
+// ── 기록 계산 ──
+const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : null);
+const pctText = (v) => (v === null || v === undefined ? '-' : `${v}%`);
+
+function summarize(s) {
+  const avg = s.killTimes.length
+    ? Math.round((s.killTimes.reduce((a, b) => a + b, 0) / s.killTimes.length) * 1000)
+    : null;
+  return {
+    kills: s.kills,
+    shots: s.shots,
+    hits: s.hits,
+    accuracy: pct(s.hits, s.shots),
+    headRate: pct(s.heads, s.hits),
+    avgKillMs: avg,
+    date: new Date().toISOString().slice(0, 10),
+  };
 }
 
+function renderBest() {
+  const b = loadBest();
+  el.bestLine.textContent = b
+    ? `최고 기록: 처치 ${b.kills} · 명중률 ${pctText(b.accuracy)} · 헤드샷률 ${pctText(b.headRate)} (${b.date})`
+    : '최고 기록: 없음';
+}
+
+let lastResult = null;   // 마지막 판 결과
+let lastWasRecord = false;
+
+// ── 시작 / 일시정지 / 결과 화면 ──
 function showOverlay() {
-  const s = game.stats;
+  const ended = game.state === 'ended';
+  el.result.classList.toggle('hidden', !ended);
+
   if (game.state === 'paused') {
-    overlayTitle.textContent = '일시정지';
-    overlayInfo.textContent = '';
-    startBtn.textContent = '클릭해서 계속';
-  } else if (game.state === 'ended') {
-    overlayTitle.textContent = '종료';
-    // 정식 결과 화면은 4단계에서
-    overlayInfo.textContent =
-      `처치 ${s.kills} · 명중률 ${pct(s.hits, s.shots)} · 헤드샷률 ${pct(s.heads, s.hits)}`;
-    startBtn.textContent = '다시하기';
+    el.title.textContent = '일시정지';
+    el.startBtn.textContent = '클릭해서 계속';
+  } else if (ended && lastResult) {
+    el.title.textContent = '결과';
+    el.startBtn.textContent = '다시하기';
+    el.newRecord.classList.toggle('hidden', !lastWasRecord);
+    el.resKills.textContent = lastResult.kills;
+    el.resAcc.textContent = pctText(lastResult.accuracy);
+    el.resHead.textContent = pctText(lastResult.headRate);
+    el.resTtk.textContent = lastResult.avgKillMs === null ? '-' : `${lastResult.avgKillMs} ms`;
+    el.resShots.textContent = `${lastResult.shots} / ${lastResult.hits}`;
   } else {
-    overlayTitle.textContent = '플릭 모드';
-    overlayInfo.textContent = '';
-    startBtn.textContent = '클릭해서 시작';
+    el.title.textContent = '플릭 모드';
+    el.startBtn.textContent = '클릭해서 시작';
   }
-  lockHint.textContent = '';
-  overlay.classList.remove('hidden');
+
+  renderBest();
+  el.lockHint.textContent = '';
+  el.overlay.classList.remove('hidden');
 }
 
-startBtn.addEventListener('click', async () => {
-  input.state.sens = readSens();
-  sensInput.value = input.state.sens;
+el.startBtn.addEventListener('click', async () => {
+  input.state.sens = clampSens(parseFloat(el.sens.value));
+  el.sens.value = input.state.sens;
+  saveSettings({ sens: input.state.sens });
   const ok = await input.requestLock();
-  if (!ok) lockHint.textContent = '잠시 후 다시 눌러주세요.';
+  if (!ok) el.lockHint.textContent = '잠시 후 다시 눌러주세요.';
 });
 
 input.onLockChange((locked) => {
   if (locked) {
-    overlay.classList.add('hidden');
+    el.overlay.classList.add('hidden');
+    el.rawStatus.textContent = rawLabel(input.state.raw);
     if (game.state === 'paused') game.resume();
     else if (game.state === 'idle' || game.state === 'ended') game.start();
   } else {
@@ -84,8 +119,10 @@ input.onLockChange((locked) => {
   }
 });
 
-game.onEnd(() => {
-  // 마우스 잠금을 풀면 onLockChange에서 종료 화면이 뜸
+game.onEnd((stats) => {
+  lastResult = summarize(stats);
+  lastWasRecord = saveIfBest(lastResult);
+  // 마우스 잠금을 풀면 onLockChange에서 결과 화면이 뜸
   if (document.pointerLockElement) document.exitPointerLock();
   else showOverlay();
 });
@@ -99,36 +136,20 @@ input.onShoot(() => {
 
 window.addEventListener('resize', () => handleResize(renderer, camera));
 
-// ── HUD ──
 function rawLabel(raw) {
   if (raw === true) return '사용 중';
-  if (raw === false) return '미지원';
+  if (raw === false) return '미지원 (마우스 가속이 섞일 수 있음)';
   return '확인 불가';
 }
 
-function lastHitLabel(r) {
-  if (!r) return '-';
-  if (!r.hit) return '빗나감';
-  return `${partLabel(r.part)} ${r.damage}${r.killed ? ' · 처치' : ''}`;
-}
-
+// ── HUD ──
 function updateHud() {
-  hud.yaw.textContent = input.normalizedYaw().toFixed(1);
-  hud.pitch.textContent = input.state.pitch.toFixed(1);
-  hud.sens.textContent = input.state.sens.toFixed(2);
-  hud.raw.textContent = rawLabel(input.state.raw);
-
   const s = game.stats;
-  hud.lastHit.textContent = lastHitLabel(game.lastHit);
-  hud.shots.textContent = s.shots;
-  hud.hits.textContent = s.hits;
-  hud.heads.textContent = s.heads;
-  hud.kills.textContent = s.kills;
-
-  timerEl.textContent = Math.ceil(game.timeLeft);
-
-  // 카운트다운 숫자
-  centerMsg.textContent = game.state === 'countdown' ? Math.ceil(game.countdownLeft) : '';
+  el.hudKills.textContent = s.kills;
+  el.hudAcc.textContent = pctText(pct(s.hits, s.shots));
+  el.hudHead.textContent = pctText(pct(s.heads, s.hits));
+  el.timer.textContent = Math.ceil(game.timeLeft);
+  el.centerMsg.textContent = game.state === 'countdown' ? Math.ceil(game.countdownLeft) : '';
 }
 
 // ── 게임 루프 ──
@@ -146,4 +167,5 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 
+renderBest();
 requestAnimationFrame(loop);
