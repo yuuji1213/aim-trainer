@@ -1,5 +1,7 @@
 // 포인터 락 + 발로란트 감도 공식으로 시점 회전
-import { VALORANT_YAW, PITCH_LIMIT } from './config.js';
+import { VALORANT_YAW, PITCH_LIMIT, WEAPON } from './config.js';
+
+const MIN_SHOT_INTERVAL_MS = 1000 / WEAPON.fireRate; // 밴달 연사 속도보다 빠르게는 못 쏨
 
 export function createInput(canvas) {
   const state = {
@@ -10,7 +12,8 @@ export function createInput(canvas) {
     raw: null,   // true: 원시 입력 확인됨 / false: 미지원 / null: 확인 불가
   };
 
-  const listeners = { lockChange: [] };
+  const listeners = { lockChange: [], shoot: [] };
+  let lastShotAt = -Infinity;
 
   // 포인터 락 요청: 원시 입력(unadjustedMovement)을 먼저 시도하고, 안 되면 일반 방식
   async function requestLock() {
@@ -48,6 +51,15 @@ export function createInput(canvas) {
     state.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, state.pitch));
   });
 
+  // 좌클릭 = 1발 (탭 사격). 누르고 있어도 연사되지 않음
+  document.addEventListener('mousedown', (e) => {
+    if (!state.locked || e.button !== 0) return;
+    const now = performance.now();
+    if (now - lastShotAt < MIN_SHOT_INTERVAL_MS) return;
+    lastShotAt = now;
+    listeners.shoot.forEach((fn) => fn());
+  });
+
   // 카메라에 현재 시점 적용 (Three.js 회전은 라디안, 오른쪽 회전 = -Y)
   function applyTo(camera) {
     camera.rotation.y = -state.yaw * (Math.PI / 180);
@@ -65,5 +77,6 @@ export function createInput(canvas) {
     applyTo,
     normalizedYaw,
     onLockChange: (fn) => listeners.lockChange.push(fn),
+    onShoot: (fn) => listeners.shoot.push(fn),
   };
 }

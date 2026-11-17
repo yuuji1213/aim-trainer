@@ -15,17 +15,57 @@ html, body {
   height: 100%;
 }
 
-#center-dot {
+/* 크로스헤어: 값은 js/ui.js가 CSS 변수로 넣어줌 */
+#crosshair {
+  --ch-color: #00ffaa;
+  --ch-len: 6px;
+  --ch-thick: 2px;
+  --ch-gap: 4px;
   position: fixed;
   left: 50%;
   top: 50%;
-  width: 4px;
-  height: 4px;
-  margin: -2px 0 0 -2px;
-  background: #fff;
-  border-radius: 50%;
+  width: 0;
+  height: 0;
   pointer-events: none;
 }
+
+#crosshair .ch-line,
+#crosshair .ch-dot {
+  position: absolute;
+  background: var(--ch-color);
+}
+
+#crosshair.with-outline .ch-line,
+#crosshair.with-outline .ch-dot {
+  outline: 1px solid #000;
+}
+
+#crosshair .ch-top,
+#crosshair .ch-bottom {
+  width: var(--ch-thick);
+  height: var(--ch-len);
+  left: calc(var(--ch-thick) / -2);
+}
+#crosshair .ch-top    { bottom: var(--ch-gap); }
+#crosshair .ch-bottom { top: var(--ch-gap); }
+
+#crosshair .ch-left,
+#crosshair .ch-right {
+  width: var(--ch-len);
+  height: var(--ch-thick);
+  top: calc(var(--ch-thick) / -2);
+}
+#crosshair .ch-left  { right: var(--ch-gap); }
+#crosshair .ch-right { left: var(--ch-gap); }
+
+#crosshair .ch-dot {
+  display: none;
+  width: var(--ch-thick);
+  height: var(--ch-thick);
+  left: calc(var(--ch-thick) / -2);
+  top: calc(var(--ch-thick) / -2);
+}
+#crosshair.with-dot .ch-dot { display: block; }
 
 #hud {
   position: fixed;
@@ -38,6 +78,12 @@ html, body {
   line-height: 1.6;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
+}
+
+#hud hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  margin: 4px 0;
 }
 
 #overlay {

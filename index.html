@@ -16,21 +16,31 @@
 <body>
   <canvas id="game"></canvas>
 
-  <!-- 임시 중앙점: 2단계에서 크로스헤어로 교체 -->
-  <div id="center-dot"></div>
+  <!-- 크로스헤어: 모양은 js/config.js의 CROSSHAIR에서 변경 -->
+  <div id="crosshair">
+    <span class="ch-line ch-top"></span>
+    <span class="ch-line ch-bottom"></span>
+    <span class="ch-line ch-left"></span>
+    <span class="ch-line ch-right"></span>
+    <span class="ch-dot"></span>
+  </div>
 
-  <!-- 1단계 테스트용 HUD -->
+  <!-- 테스트용 HUD -->
   <div id="hud">
     <div>yaw <span id="hud-yaw">0.0</span>°</div>
     <div>pitch <span id="hud-pitch">0.0</span>°</div>
     <div>감도 <span id="hud-sens">-</span></div>
     <div>원시 입력 <span id="hud-raw">-</span></div>
+    <hr>
+    <div>표적 HP <span id="hud-target-hp">-</span></div>
+    <div>마지막 사격 <span id="hud-last-hit">-</span></div>
+    <div>발사 <span id="hud-shots">0</span> · 명중 <span id="hud-hits">0</span> · 헤드 <span id="hud-heads">0</span> · 처치 <span id="hud-kills">0</span></div>
   </div>
 
   <!-- 시작 / 일시정지 화면 -->
   <div id="overlay">
     <div class="panel">
-      <h1>에임 트레이너 <small>1단계 테스트</small></h1>
+      <h1>에임 트레이너 <small>2단계 테스트</small></h1>
       <label class="row">
         발로란트 감도
         <input id="sens-input" type="number" min="0.01" max="10" step="0.01">
@@ -38,6 +48,9 @@
       <p class="hint">
         발로란트와 같은 마우스 DPI에서 같은 감도 숫자를 넣으면 됩니다.<br>
         벽의 색 띠: 앞 빨강(0°) · 오른쪽 초록(90°) · 뒤 파랑(180°) · 왼쪽 노랑(270°)
+      </p>
+      <p class="hint">
+        좌클릭 1번 = 1발 (밴달 · 머리 160 / 몸 40 / 다리 34 · 표적 체력 150)
       </p>
       <button id="start-btn">클릭해서 시작</button>
       <p class="hint">ESC를 누르면 이 화면으로 돌아옵니다.</p>
