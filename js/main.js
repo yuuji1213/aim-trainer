@@ -1,4 +1,4 @@
-// 초기화 + 게임 루프 (연습 모드 · 6단계: 반동·탄 퍼짐 + 총알 궤적 + 탄흔)
+// 초기화 + 게임 루프 (연습 모드 · 6단계: 반동(7자 패턴, 화면 따라감)·탄 퍼짐 + 총알 궤적 + 탄흔)
 import { createScene, handleResize } from './scene.js';
 import { createInput } from './input.js';
 import { createGame } from './game.js';
@@ -32,6 +32,7 @@ const el = {
   hudKills: $('hud-kills'),
   hudAcc: $('hud-acc'),
   hudHead: $('hud-head'),
+  hudClick: $('hud-click'),
 };
 
 const { renderer, scene, camera, worldMeshes } = createScene(el.canvas);
@@ -142,8 +143,18 @@ game.onEnd((stats) => {
 
 // ── 사격 ──
 weapon.setCanFire(() => game.state === 'playing');
-input.onTriggerDown(() => weapon.triggerDown());
-input.onTriggerUp(() => weapon.triggerUp());
+// 클릭 진단: 한 번 누를 때 얼마나 눌렸고 몇 발 나갔는지 (터치패드 탭 확인용)
+let pressStart = 0;
+let pressShots = 0;
+input.onTriggerDown(() => {
+  pressStart = performance.now();
+  pressShots = 0;
+  weapon.triggerDown();
+});
+input.onTriggerUp(() => {
+  weapon.triggerUp();
+  el.hudClick.textContent = `${Math.round(performance.now() - pressStart)}ms · ${pressShots}발`;
+});
 const DEG = Math.PI / 180;
 const _origin = new THREE.Vector3();
 const _dir = new THREE.Vector3();
@@ -166,6 +177,7 @@ weapon.onFire((shot) => {
 
   const r = game.shoot(_origin, _dir);
   if (!r) return;
+  pressShots += 1;
 
   // 궤적 시작점: 화면에 보이는 총구 위치에서 카메라 앞 0.6m 지점
   weapon.muzzleNDC(_ndc);
@@ -212,8 +224,9 @@ function loop(now) {
   effects.update(dt);
   updateHud();
 
-  // 화면만 아주 살짝 튐 (판정·크로스헤어와 무관)
-  camera.rotation.x += weapon.viewPunch * DEG;
+  // 화면이 반동을 따라 올라감 (크로스헤어도 함께). 판정은 onFire에서 따로 계산
+  camera.rotation.x += weapon.viewPitch * DEG;
+  camera.rotation.y -= weapon.viewYaw * DEG;
 
   renderer.clear();
   renderer.render(scene, camera);

@@ -80,6 +80,8 @@ html, body {
   pointer-events: none;
 }
 
+#hud .dim { color: #8a93a3; }
+
 #hud hr {
   border: none;
   border-top: 1px solid rgba(255, 255, 255, 0.2);

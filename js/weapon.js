@@ -74,7 +74,10 @@ export function createWeapon() {
   scene.add(group);
 
   // ── 발사 타이밍 ──
-  let clock = 0;          // 무기 시계 (초)
+  // 무기 시계 (초): 실제 시간 기준. 프레임 간격(dt)으로 쌓으면 화면이 느릴 때
+  // '누르기 전 시간'까지 포함돼서 짧게 눌러도 2발이 나가는 문제가 생김
+  const now = () => performance.now() / 1000;
+  let clock = now();
   let nextShotAt = 0;     // 다음 발사가 가능한 시각
   let held = false;       // 방아쇠를 누르고 있는지
   let kick = 0;           // 발사 모션 크기 (뒤로 밀림)
@@ -85,46 +88,48 @@ export function createWeapon() {
   // ── 반동 상태 (단위: 도) ──
   const recoil = {
     shots: 0,        // 이번 연사에서 쏜 발 수 (회복되면 줄어듦)
-    pitch: 0,        // 위로 쌓인 반동
-    yaw: 0,          // 옆으로 쌓인 반동 (+ = 오른쪽)
-    side: 1,         // 흐르는 방향
+    pitch: 0,        // 지금 쌓여 있는 반동 (위)
+    yaw: 0,          // 지금 쌓여 있는 반동 (+ = 오른쪽)
+    viewPitch: 0,    // 화면이 실제로 따라간 양 (부드럽게)
+    viewYaw: 0,
     lastShotAt: -Infinity,
     recovering: false,
     rec: null,       // 회복 시작 시점의 값 { shots, pitch, yaw, time }
-    punch: 0,        // 화면 흔들림
   };
 
   function resetRecoil() {
-    Object.assign(recoil, { shots: 0, pitch: 0, yaw: 0, side: Math.random() < 0.5 ? -1 : 1,
-      lastShotAt: -Infinity, recovering: false, rec: null, punch: 0 });
+    Object.assign(recoil, { shots: 0, pitch: 0, yaw: 0, viewPitch: 0, viewYaw: 0,
+      lastShotAt: -Infinity, recovering: false, rec: null });
   }
   resetRecoil();
 
+  // n발째 반동 위치. 패턴(25발)이 끝나면 윗변 구간을 왕복
+  const P = RECOIL.pattern;
+  const loopSeq = [];
+  for (let i = P.length - 2; i >= RECOIL.loopFrom; i--) loopSeq.push(i);
+  for (let i = RECOIL.loopFrom + 1; i <= P.length - 1; i++) loopSeq.push(i);
+  function patternAt(n) {
+    if (n < P.length) return P[n];
+    return P[loopSeq[(n - P.length) % loopSeq.length]];
+  }
+
   function fire() {
     const n = Math.floor(recoil.shots); // 0 = 첫 발
+    const [py, pp] = patternAt(n);
 
-    // 1) 이번 발의 방향: 지금까지 쌓인 반동 + 랜덤 퍼짐
+    // 이번 발의 방향: 패턴 위치 + 랜덤 퍼짐
     const spread = Math.min(RECOIL.spreadMax, RECOIL.spreadFirst + RECOIL.spreadPerShot * n);
-    const jitter = randomInCircle(spread);
-    const shot = { pitchOffset: recoil.pitch + jitter.y, yawOffset: recoil.yaw + jitter.x, spread };
+    const jitter = randomInCircle(spread / 2);
+    const shot = { pitchOffset: pp + jitter.y, yawOffset: py + jitter.x, spread };
 
-    // 2) 다음 발을 위해 반동 쌓기
-    if (n < RECOIL.climb.length) {
-      recoil.pitch += RECOIL.climb[n];
-    } else {
-      if (Math.random() < RECOIL.driftSwitchChance) recoil.side *= -1;
-      recoil.yaw += RECOIL.drift * recoil.side;
-      if (Math.abs(recoil.yaw) >= RECOIL.driftMax) {
-        recoil.yaw = Math.sign(recoil.yaw) * RECOIL.driftMax;
-        recoil.side *= -1; // 끝까지 가면 반대로
-      }
-    }
+    // 화면은 방금 총알이 간 자리를 따라감 (viewFollow 비율만큼)
+    recoil.pitch = pp;
+    recoil.yaw = py;
     recoil.shots = n + 1;
     recoil.lastShotAt = clock;
     recoil.recovering = false;
-    recoil.punch += RECOIL.viewPunch;
 
-    // 3) 모션
+    // 모션
     kick = 0.035;
     flashLeft = 0.04;
     flash.rotation.z = Math.random() * Math.PI;
@@ -156,6 +161,7 @@ export function createWeapon() {
 
   // 누르는 순간: 쏠 수 있으면 즉시 1발 (탭)
   function triggerDown() {
+    clock = now();
     held = true;
     if (canFire() && clock >= nextShotAt) {
       fire();
@@ -168,7 +174,7 @@ export function createWeapon() {
   }
 
   function update(dt) {
-    clock += dt;
+    clock = now();
 
     // 누르고 있으면 초당 9.75발 간격으로 연사
     if (held && canFire()) {
@@ -181,7 +187,10 @@ export function createWeapon() {
     }
 
     updateRecovery(dt);
-    recoil.punch *= Math.exp(-dt * 18);
+    // 화면 반동: 목표(쌓인 반동 × 따라가는 비율)로 부드럽게 이동
+    const f = 1 - Math.exp(-dt * RECOIL.viewSmooth);
+    recoil.viewPitch += (recoil.pitch * RECOIL.viewFollow - recoil.viewPitch) * f;
+    recoil.viewYaw += (recoil.yaw * RECOIL.viewFollow - recoil.viewYaw) * f;
 
     // 발사 모션 회복
     kick *= Math.exp(-dt * 22);
@@ -218,7 +227,8 @@ export function createWeapon() {
     resize,
     muzzleNDC,
     resetRecoil,
-    get viewPunch() { return recoil.punch; },
+    get viewPitch() { return recoil.viewPitch; },
+    get viewYaw() { return recoil.viewYaw; },
     get recoilState() { return recoil; },
     setCanFire: (fn) => { canFire = fn; },
     onFire: (fn) => fireListeners.push(fn),
